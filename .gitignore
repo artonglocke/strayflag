@@ -1,0 +1,6 @@
+.dart_tool/
+build/
+pubspec.lock.bak
+example/fixtures/
+*.exe
+/strayflag

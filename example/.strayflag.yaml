@@ -1,0 +1,14 @@
+# Example config for a Flutter app with an intentional screenshot mode.
+fail_on: medium
+
+allow:
+  - "Debug output"          # a log label we know is harmless
+
+features:
+  - name: Screenshot mode
+    flags: [screenshots-mode]
+    description: Fills the app with sample recipes so App Store screenshots look the same in every language. It does not unlock any paid content.
+    how_to_enable: Not reachable by users. Our UI test runner starts the app with the launch argument -screenshots-mode.
+
+expect:
+  - com.amaranth.tablefull.pro_monthly

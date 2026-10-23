@@ -1,0 +1,72 @@
+name: strayflag
+description: Fail CI when a built .ipa, .xcarchive, .apk or .aab still contains debug, mock or unlock switches.
+author: Arton Glocke
+branding:
+  icon: flag
+  color: orange
+
+inputs:
+  path:
+    description: Path to the built artifact (.ipa, .xcarchive, .app, .apk, .aab or a binary).
+    required: true
+  config:
+    description: Path to the config file. Defaults to .strayflag.yaml in the working directory if it exists.
+    required: false
+    default: ''
+  baseline:
+    description: Previous JSON report or previous build. Only strings that are new compared to it are reported.
+    required: false
+    default: ''
+  fail-on:
+    description: Lowest severity that fails the step (low, medium, high, never). Defaults to the config value, else medium.
+    required: false
+    default: ''
+  min-severity:
+    description: Lowest severity shown in the report (low, medium, high). Defaults to medium.
+    required: false
+    default: ''
+  deep:
+    description: Also scan every native library, app extension and DEX file.
+    required: false
+    default: 'false'
+  notes-out:
+    description: If set, write the generated Notes for Review markdown to this path.
+    required: false
+    default: ''
+  summary:
+    description: Write a markdown report to the job summary.
+    required: false
+    default: 'true'
+  setup-dart:
+    description: Install Dart with dart-lang/setup-dart. Set to false if Dart or Flutter is already on PATH.
+    required: false
+    default: 'true'
+
+outputs:
+  result:
+    description: pass or fail
+    value: ${{ steps.scan.outputs.result }}
+  findings:
+    description: Number of reported suspicious strings
+    value: ${{ steps.scan.outputs.findings }}
+  report:
+    description: Path to the JSON report
+    value: ${{ steps.scan.outputs.report }}
+
+runs:
+  using: composite
+  steps:
+    - if: inputs.setup-dart == 'true'
+      uses: dart-lang/setup-dart@v1
+    - id: scan
+      shell: bash
+      env:
+        SF_PATH: ${{ inputs.path }}
+        SF_CONFIG: ${{ inputs.config }}
+        SF_BASELINE: ${{ inputs.baseline }}
+        SF_FAIL_ON: ${{ inputs.fail-on }}
+        SF_MIN_SEVERITY: ${{ inputs.min-severity }}
+        SF_DEEP: ${{ inputs.deep }}
+        SF_NOTES_OUT: ${{ inputs.notes-out }}
+        SF_SUMMARY: ${{ inputs.summary }}
+      run: bash "$GITHUB_ACTION_PATH/tool/action_run.sh"
