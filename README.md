@@ -97,6 +97,11 @@ Other options: `--config FILE`, `--fail-on low|medium|high|never`, `--json-out F
 | Native / unknown | iOS main executable; Android `classes*.dex` |
 | `--deep` | additionally every Mach-O/dylib in the bundle, every `.so` of the chosen ABI and all DEX files |
 
+Strings are read with exact boundaries where the format allows it: Flutter's Dart string table (Latin-1 and
+UTF-16 strings), the Unity IL2CPP literal table and Android's DEX string table. Everything else gets a UTF-8-aware
+`strings` scan. Localized text such as `Testni način: otključaj sve premium značajke` or
+`…build yet — upgrading simply unlocks Premium…` comes out whole, not cut at the first `č` or `—`.
+
 Flutter's `--obfuscate` renames classes and methods but **keeps string literals readable**, so
 `'enableUnlockedMockPurchases'` used as a map key, a remote-config key or a widget label still shows up.
 For Unity, the IL2CPP literal table gives clean, separate strings, and class/method names

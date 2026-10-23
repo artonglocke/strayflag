@@ -41,7 +41,7 @@ class Rule {
   String toString() => term;
 }
 
-final _boundary = RegExp(r'[^A-Za-z0-9]+');
+final _boundary = RegExp(r'[^\p{L}\p{N}]+', unicode: true);
 final _lowerUpper = RegExp(r'([a-z0-9])([A-Z])');
 final _acronym = RegExp(r'([A-Z]+)([A-Z][a-z])');
 final _letterDigit = RegExp(r'([A-Za-z])([0-9])');

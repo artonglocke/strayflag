@@ -56,6 +56,25 @@ void main() {
     expect(r.out, contains('✗ FAIL'));
   });
 
+  test('non-ASCII strings come out whole (Croatian, em dash) in Dart, native and Unity code', () async {
+    flutterIpa(t('hr.ipa'), [...normalAppStrings, croatianFlag, 'enableUnlockedMockPurchases', emDashStub],
+        runnerStrings: ['Način rada — DEBUG_MENU_OTKLJUČAN']);
+    final r = await cli(['scan', t('hr.ipa'), '--json', '--min-severity', 'low']);
+    expect(r.code, exitFindings, reason: '$r');
+    final found = {for (final f in (jsonDecode(r.out) as Map)['findings'] as List) f['string']: f};
+    expect(found[emDashStub]?['severity'], 'high', reason: '${found.keys}');
+    expect(found[emDashStub]?['source'], 'dart');
+    expect(found['enableUnlockedMockPurchases']?['severity'], 'high');
+    expect(found[croatianFlag]?['severity'], 'low', reason: 'matched on "premium", kept whole');
+    expect(found['Način rada — DEBUG_MENU_OTKLJUČAN']?['severity'], 'medium');
+    expect(found.keys.where((k) => k.contains('način') && k != croatianFlag), isEmpty);
+
+    unityIpa(t('u.ipa'), literals: ['Otključaj sve razine — unlockAll'], identifiers: ['GameManager']);
+    final u = await cli(['scan', t('u.ipa'), '--json']);
+    expect([for (final f in (jsonDecode(u.out) as Map)['findings'] as List) f['string']],
+        ['Otključaj sve razine — unlockAll']);
+  });
+
   test('clean Flutter .ipa passes with exit 0', () async {
     flutterIpa(t('clean.ipa'), normalAppStrings);
     final r = await cli(['scan', t('clean.ipa')]);
@@ -240,6 +259,7 @@ expect: [com.amaranth.tablefull.pro_monthly, com.amaranth.tablefull.pro_yearly]
     final found = [for (final f in j['findings'] as List) f['string']];
     expect(found, containsAll([...plantedFlags, 'Internal dev menu: unlock all premium']));
     expect(found.length, 4, reason: 'no framework noise at default severity: $found');
+    expect({for (final f in j['findings'] as List) f['source']}, {'dart'});
     expect(r.code, exitFindings);
   }, skip: File(realApk).existsSync() ? false : 'real APK not built (see tool/build_real_flutter_fixture.sh)');
 }

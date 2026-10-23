@@ -1,5 +1,6 @@
 // Builds synthetic release artifacts with the real directory layouts of
 // Flutter / Unity / React Native / native iOS and Android builds.
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -10,22 +11,54 @@ import 'package:strayflag/strayflag.dart';
 final _machO64 = [0xCF, 0xFA, 0xED, 0xFE, 0x0C, 0x00, 0x00, 0x01]; // MH_MAGIC_64 LE, arm64
 final _elf = [0x7F, 0x45, 0x4C, 0x46, 0x02, 0x01, 0x01, 0x00];
 
-/// A fake binary: header, noise, then each string written the way the Dart
-/// AOT snapshot does (length byte with the high bit set, then the bytes).
-Uint8List fakeBinary(List<int> magic, List<String> strings, {int seed = 1}) {
-  final b = BytesBuilder()..add(magic);
-  var x = seed;
-  int rnd() => x = (x * 1103515245 + 12345) & 0x7fffffff;
-  for (var i = 0; i < 256; i++) {
-    b.addByte(rnd() & 0x1F); // non-printable filler
+/// Encodes [s] the way a Dart AOT snapshot stores it: a length prefix
+/// (`length << 1 | isTwoByte`, 7 bits per byte, low groups first, high bit on
+/// the last byte), then Latin-1 bytes or UTF-16LE code units.
+List<int> dartString(String s) {
+  final twoByte = s.codeUnits.any((c) => c > 0xFF);
+  var v = (s.length << 1) | (twoByte ? 1 : 0);
+  final out = <int>[];
+  while (v > 0x7F) {
+    out.add(v & 0x7F);
+    v >>= 7;
   }
+  out.add(v | 0x80);
+  for (final c in s.codeUnits) {
+    out.add(c & 0xFF);
+    if (twoByte) out.add(c >> 8);
+  }
+  return out;
+}
+
+List<int> _filler(int seed, int n) {
+  var x = seed;
+  return [for (var i = 0; i < n; i++) (x = (x * 1103515245 + 12345) & 0x7fffffff) & 0x0F];
+}
+
+/// A fake Dart AOT snapshot: header, filler, and a string table with the
+/// strings packed back to back exactly as Dart writes them.
+Uint8List fakeDartSnapshot(List<int> magic, List<String> strings, {int seed = 1}) {
+  final b = BytesBuilder()
+    ..add(magic)
+    ..add(_filler(seed, 256));
   for (final s in strings) {
-    b.addByte(0x80 | (s.length & 0x7F));
-    b.add(s.codeUnits);
-    b.addByte(0x00);
-    for (var i = 0; i < 8; i++) {
-      b.addByte(rnd() & 0x0F);
-    }
+    b.add(dartString(s));
+  }
+  b.add(_filler(seed + 1, 64));
+  return b.toBytes();
+}
+
+/// A fake native binary (Mach-O / ELF): NUL-terminated UTF-8 C strings
+/// separated by filler, like `__cstring` / `.rodata`.
+Uint8List fakeBinary(List<int> magic, List<String> strings, {int seed = 1}) {
+  final b = BytesBuilder()
+    ..add(magic)
+    ..add(_filler(seed, 256));
+  for (final s in strings) {
+    b
+      ..add(utf8.encode(s))
+      ..addByte(0)
+      ..add(_filler(seed++, 8));
   }
   return b.toBytes();
 }
@@ -47,10 +80,10 @@ const flutterFrameworkNoise = [
 ];
 
 Uint8List fakeDartAotMachO(List<String> appStrings) =>
-    fakeBinary(_machO64, [...flutterFrameworkNoise, ...appStrings], seed: 7);
+    fakeDartSnapshot(_machO64, [...flutterFrameworkNoise, ...appStrings], seed: 7);
 
 Uint8List fakeDartAotElf(List<String> appStrings) =>
-    fakeBinary(_elf, [...flutterFrameworkNoise, ...appStrings], seed: 9);
+    fakeDartSnapshot(_elf, [...flutterFrameworkNoise, ...appStrings], seed: 9);
 
 void _addFile(Archive a, String path, List<int> bytes) => a.addFile(ArchiveFile(path, bytes.length, bytes));
 
@@ -155,7 +188,12 @@ const plantedFlags = [
   'enableUnlockedMockPurchases',
 ];
 
+/// Localized strings with non-ASCII characters, next to a planted flag.
+const croatianFlag = 'Testni način: otključaj sve premium značajke';
+const emDashStub = "Billing isn't wired up in this build yet — upgrading simply unlocks Premium for testing.";
+
 const normalAppStrings = [
+  'Vaš plan i recepti su prevedeni.',
   'com.amaranth.tablefull.pro_monthly',
   'Welcome back!',
   'Plan your week',

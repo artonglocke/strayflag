@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'strings.dart';
@@ -34,7 +35,7 @@ class Il2CppStrings {
 /// Unity version degrades to noisier output instead of missing strings.
 Il2CppStrings readIl2CppMetadata(Uint8List bytes) {
   if (!isIl2CppMetadata(bytes) || bytes.length < 64) {
-    return Il2CppStrings(0, const [], asciiStrings(bytes).toList(), parsed: false);
+    return Il2CppStrings(0, const [], textStrings(bytes).toList(), parsed: false);
   }
   final bd = ByteData.sublistView(bytes);
   final version = bd.getInt32(4, Endian.little);
@@ -49,7 +50,7 @@ Il2CppStrings readIl2CppMetadata(Uint8List bytes) {
       _tryLayout(bytes, bd, version, litOff: 8, litSize: 12, dataOff: 20, dataSize: 24, strOff: 32, strSize: 36);
   if (triples != null) return triples;
 
-  return Il2CppStrings(version, const [], asciiStrings(bytes).toList(), parsed: false);
+  return Il2CppStrings(version, const [], textStrings(bytes).toList(), parsed: false);
 }
 
 Il2CppStrings? _tryLayout(Uint8List bytes, ByteData bd, int version,
@@ -73,7 +74,7 @@ Il2CppStrings? _tryLayout(Uint8List bytes, ByteData bd, int version,
     if (length == 0) continue;
     literals.add(ExtractedString(decodeUtf8(bytes, start, start + length), start));
   }
-  final identifiers = asciiStrings(bytes, start: so, end: so + ss, minLength: 3).toList();
+  final identifiers = textStrings(bytes, start: so, end: so + ss, minLength: 3).toList();
   return Il2CppStrings(version, literals, identifiers, parsed: true);
 }
 
@@ -84,7 +85,7 @@ Uint8List buildFakeIl2CppMetadata(List<String> literals, List<String> identifier
   final data = BytesBuilder();
   final table = BytesBuilder();
   for (final s in literals) {
-    final enc = s.codeUnits; // fixtures are ASCII
+    final enc = utf8.encode(s); // IL2CPP literals are UTF-8
     final entry = ByteData(8)
       ..setUint32(0, enc.length, Endian.little)
       ..setUint32(4, data.length, Endian.little);
@@ -94,7 +95,7 @@ Uint8List buildFakeIl2CppMetadata(List<String> literals, List<String> identifier
   final idents = BytesBuilder();
   for (final s in identifiers) {
     idents
-      ..add(s.codeUnits)
+      ..add(utf8.encode(s))
       ..addByte(0);
   }
   final t = table.toBytes(), d = data.toBytes(), id = idents.toBytes();

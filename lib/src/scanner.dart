@@ -234,12 +234,26 @@ class Scanner {
               : 'metadata v${m.version} layout not recognised, used generic strings scan',
         );
       case TargetKind.dartAot:
+        // Exact strings from the snapshot's string table (Latin-1 and
+        // UTF-16), then a generic scan of whatever the table did not cover.
+        final covered = Uint8List(bytes.length);
+        final out = <(ExtractedString, String)>[
+          for (final s in dartSnapshotStrings(bytes, covered: covered)) (s, 'dart'),
+        ];
+        final exact = out.length;
+        final seen = {for (final (s, _) in out) s.value};
+        for (final s in textStrings(bytes, skip: covered)) {
+          if (seen.add(s.value)) out.add((s, 'string'));
+        }
+        return _Extracted(out, '$exact from the Dart string table');
       case TargetKind.binary:
       case TargetKind.jsBundle:
-        // Dart keeps most literals as one-byte (Latin-1) strings; strings with
-        // non-Latin-1 characters are two-byte, so scan UTF-16LE as well.
+        final dex = dexStrings(bytes);
+        if (dex != null) {
+          return _Extracted([for (final s in dex) (s, 'dex')], 'DEX string table');
+        }
         final out = <(ExtractedString, String)>[
-          for (final s in asciiStrings(bytes)) (s, 'string'),
+          for (final s in textStrings(bytes)) (s, 'string'),
         ];
         final seen = {for (final (s, _) in out) s.value};
         for (final s in utf16leStrings(bytes, minLength: 6)) {
